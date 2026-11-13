@@ -1,0 +1,33 @@
+
+# Python virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Environment variables and credentials
+.env
+.env.*
+!.env.example
+*.json.key
+
+# MLflow tracking files
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Generated model files
+models/*.joblib
+models/*.pkl
+
+# Generated processed data
+data/processed/
+
+# Local development files
+.streamlit/secrets.toml
+.pytest_cache/
