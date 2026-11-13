@@ -1,29 +1,29 @@
 
 FROM python:3.13-slim
 
-# Set the working directory
 WORKDIR /app
 
-# Python settings
+# Python runtime settings
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install Python dependencies
+# Install dependencies
 COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the API and configuration
+# Copy application code
 COPY api/ ./api/
+COPY src/ ./src/
 COPY config.yaml .
 
-# Copy the trained model
+# Copy locally trained model for serving
 COPY models/penguin_model.joblib ./models/penguin_model.joblib
 
-# Configure the API port
+# Configure server port
 ENV PORT=8080
 
 EXPOSE 8080
 
-# Start FastAPI
+# Default command serves predictions
 CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT}"]
