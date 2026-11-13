@@ -30,7 +30,7 @@ Input features:
 
 The original dataset contains 344 observations. After removing records with missing required measurements, 342 observations remain.
 
-The cleaned dataset is stored in a private Google Cloud Storage bucket and downloaded programmatically during training.
+The cleaned dataset is stored in a private Google Cloud Storage bucket. The training pipeline can also download the public dataset directly without requiring Google Cloud credentials.
 
 ## System Architecture
 
@@ -40,28 +40,29 @@ Palmer Penguins Dataset
          v
 Data Preprocessing
          |
-         v
-Google Cloud Storage
-         |
-         v
-Training Pipeline
-         |
-         +----> MLflow Tracking
-         |
-         v
-Random Forest Model
-         |
-         v
-Docker Container
-         |
-         v
-Google Artifact Registry
-         |
-         v
-Google Cloud Run (FastAPI)
-         |
-         v
-Streamlit Web Application
+         +----> Google Cloud Storage
+         |              |
+         +--------------+
+                        |
+                        v
+                 Training Pipeline
+                        |
+                        +----> MLflow Tracking
+                        |
+                        v
+                 Random Forest Model
+                        |
+                        v
+                 Docker Container
+                        |
+                        v
+               Google Artifact Registry
+                        |
+                        v
+               Google Cloud Run (FastAPI)
+                        |
+                        v
+               Streamlit Web Application
 ```
 
 ## Technology Stack
@@ -145,7 +146,21 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Authenticate with Google Cloud using an account authorized to read the private dataset:
+### Option 1: Train Using the Public Dataset
+
+The public dataset option requires no Google Cloud credentials.
+
+```bash
+PENGUIN_DATA_SOURCE=public python -m src.train
+```
+
+This downloads the public Palmer Penguins dataset, removes incomplete observations, trains the model, evaluates predictions, and logs the experiment to MLflow.
+
+### Option 2: Train Using Google Cloud Storage
+
+Google Cloud Storage is the default training data source.
+
+Authenticate using an account authorized to read the private dataset:
 
 ```bash
 gcloud auth application-default login
@@ -159,7 +174,13 @@ python -m src.download_data
 python -m src.train
 ```
 
-Training automatically downloads the dataset from Google Cloud Storage.
+You can also explicitly select Google Cloud Storage:
+
+```bash
+PENGUIN_DATA_SOURCE=gcs python -m src.train
+```
+
+Both training options save the trained model to `models/penguin_model.joblib`.
 
 To preprocess the original local dataset, run:
 
@@ -167,7 +188,7 @@ To preprocess the original local dataset, run:
 python -m src.preprocess
 ```
 
-The trained model is saved to `models/penguin_model.joblib`.
+### MLflow Experiment Tracking
 
 Start MLflow:
 
@@ -227,7 +248,13 @@ curl -X POST \
   }'
 ```
 
-Build and run the Docker container after generating the local model file:
+### Reproducible Docker Build
+
+The Dockerfile installs dependencies and automatically trains the model during image creation using the public dataset.
+
+A previously generated model file and Google Cloud credentials are not required to build the image. Internet access is required to download dependencies and the dataset.
+
+Build and run the Docker container:
 
 ```bash
 docker build -t penguin-species-api .
@@ -236,17 +263,25 @@ docker run --rm -p 8080:8080 penguin-species-api
 
 The container serves the API at http://localhost:8080/docs.
 
+If port 8080 is already in use, run:
+
+```bash
+docker run --rm -p 8081:8080 penguin-species-api
+```
+
+The API will then be available at http://localhost:8081/docs.
+
 Docker also supports training by overriding its default command:
 
 ```bash
-docker run --rm \
-  -v "$HOME/.config/gcloud:/root/.config/gcloud:ro" \
-  -e GOOGLE_CLOUD_PROJECT=penguin-species-predictor \
-  penguin-species-api \
-  python -m src.train
+docker run --rm penguin-species-api python -m src.train
 ```
 
+This command trains using the public dataset by default.
+
 Generated training artifacts remain inside the temporary container unless volumes are mounted.
+
+The Docker build and API prediction endpoint were tested successfully using the public dataset.
 
 ## Cloud Deployment
 
@@ -285,7 +320,9 @@ gcloud run deploy penguin-species-api \
   --project penguin-species-predictor
 ```
 
-The image includes a locally generated model file. Cloud deployment therefore requires building the image from a project directory containing that file.
+The updated Dockerfile trains and packages the model automatically during the build. This removes the previous requirement to include a locally generated model file.
+
+Deployment requires appropriate Google Cloud permissions and an existing Artifact Registry repository.
 
 Deployed API:
 
@@ -311,13 +348,15 @@ The frontend is deployed through Streamlit Community Cloud using the GitHub `mai
 
 ## Collaboration and Reproducibility
 
-Development uses Git feature branches and pull requests. Changes to preprocessing, cloud ingestion, training, API serving, Docker, and Streamlit are maintained in the GitHub commit history.
+This project was completed individually using Git feature branches and pull requests to document changes and maintain a clear development history.
+
+Changes to preprocessing, cloud ingestion, training, API serving, Docker, Streamlit, and documentation are maintained in the GitHub commit history.
 
 Pipeline parameters are controlled through `config.yaml`, dependencies through `requirements.txt`, and experiments through MLflow.
 
-Local credentials, generated model files, and tracking databases are excluded from version control.
+The Dockerfile builds the trained model from a public dataset, allowing the application to be reproduced without private cloud storage access.
 
-Each team member must contribute at least one pull request, as required by the assignment.
+Local credentials, generated model files, and tracking databases are excluded from version control.
 
 ## Ethical Considerations and Limitations
 
