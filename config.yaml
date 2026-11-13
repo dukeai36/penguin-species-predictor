@@ -1,0 +1,33 @@
+
+# AIPI 510 Project 3
+# Penguin Species Predictor
+
+data:
+  raw_path: "data/raw/penguins.csv"
+  processed_path: "data/processed/penguins_clean.csv"
+  target: "species"
+
+features:
+  numeric:
+    - bill_length_mm
+    - bill_depth_mm
+    - flipper_length_mm
+    - body_mass_g
+
+split:
+  test_size: 0.20
+  validation_size: 0.20
+  random_state: 42
+
+model:
+  type: "RandomForestClassifier"
+  n_estimators: 100
+  max_depth: 5
+  random_state: 42
+
+tracking:
+  experiment_name: "penguin_species_classification"
+  tracking_uri: "sqlite:///mlflow.db"
+
+output:
+  model_path: "models/penguin_model.joblib"
