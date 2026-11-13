@@ -11,6 +11,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 
+from src.download_data import download_data
+
 
 def train_model(config_path="config.yaml"):
 
@@ -18,7 +20,11 @@ def train_model(config_path="config.yaml"):
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
 
-    # Load cleaned dataset
+    # Download cleaned data from Google Cloud Storage
+    print("Starting cloud data ingestion...")
+    download_data()
+
+    # Load downloaded dataset
     data_path = config["data"]["processed_path"]
     df = pd.read_csv(data_path)
 
@@ -29,7 +35,7 @@ def train_model(config_path="config.yaml"):
     X = df[features]
     y = df[target]
 
-    # Split data into training/validation and test sets
+    # Split into temporary training and test datasets
     X_temp, X_test, y_temp, y_test = train_test_split(
         X,
         y,
@@ -38,7 +44,7 @@ def train_model(config_path="config.yaml"):
         stratify=y,
     )
 
-    # Split remaining data into training and validation sets
+    # Split temporary data into training and validation
     X_train, X_val, y_train, y_val = train_test_split(
         X_temp,
         y_temp,
@@ -47,19 +53,19 @@ def train_model(config_path="config.yaml"):
         stratify=y_temp,
     )
 
-    print("Dataset splits:")
+    print("\nDataset splits:")
     print(f"Training samples: {len(X_train)}")
     print(f"Validation samples: {len(X_val)}")
     print(f"Test samples: {len(X_test)}")
 
-    # Initialize Random Forest model
+    # Initialize Random Forest
     model = RandomForestClassifier(
         n_estimators=config["model"]["n_estimators"],
         max_depth=config["model"]["max_depth"],
         random_state=config["model"]["random_state"],
     )
 
-    # Configure MLflow tracking
+    # Configure MLflow
     mlflow.set_tracking_uri(
         config["tracking"]["tracking_uri"]
     )
@@ -68,10 +74,10 @@ def train_model(config_path="config.yaml"):
         config["tracking"]["experiment_name"]
     )
 
-    # Start MLflow experiment
+    # Start experiment tracking
     with mlflow.start_run() as run:
 
-        # Log model parameters
+        # Log parameters
         mlflow.log_params({
             "model_type": config["model"]["type"],
             "n_estimators": config["model"]["n_estimators"],
@@ -79,6 +85,7 @@ def train_model(config_path="config.yaml"):
             "random_state": config["model"]["random_state"],
             "test_size": config["split"]["test_size"],
             "validation_size": config["split"]["validation_size"],
+            "data_source": "Google Cloud Storage",
         })
 
         # Train model
@@ -90,7 +97,7 @@ def train_model(config_path="config.yaml"):
         val_predictions = model.predict(X_val)
         test_predictions = model.predict(X_test)
 
-        # Calculate evaluation metrics
+        # Calculate accuracy
         val_accuracy = accuracy_score(
             y_val, val_predictions
         )
@@ -102,16 +109,16 @@ def train_model(config_path="config.yaml"):
         print(f"\nValidation Accuracy: {val_accuracy:.4f}")
         print(f"Test Accuracy: {test_accuracy:.4f}")
 
-        print("\nTest Classification Report:")
-
+        # Classification report
         report = classification_report(
             y_test,
             test_predictions
         )
 
+        print("\nTest Classification Report:")
         print(report)
 
-        # Log evaluation metrics to MLflow
+        # Log metrics
         mlflow.log_metric(
             "validation_accuracy",
             val_accuracy
@@ -128,7 +135,7 @@ def train_model(config_path="config.yaml"):
             "classification_report.txt"
         )
 
-        # Save trained model locally
+        # Save trained model
         model_path = Path(
             config["output"]["model_path"]
         )
@@ -142,9 +149,7 @@ def train_model(config_path="config.yaml"):
 
         print(f"\nModel saved to: {model_path}")
 
-        # Log trained model to MLflow
-        # Use cloudpickle to avoid the skops
-        # Random Forest trusted-type error.
+        # Log model to MLflow
         mlflow.sklearn.log_model(
             sk_model=model,
             name="penguin_model",
